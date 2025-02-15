@@ -5,8 +5,6 @@ const MongoStore = require('connect-mongo');
 const bcrypt = require('bcrypt');
 const path = require('path');
 const multer = require('multer');
-const nodemailer = require('nodemailer');
-const crypto = require('crypto');
 require('dotenv').config();
 
 // Import the User model
@@ -52,12 +50,6 @@ app.get('/logout', (req, res) => {
     req.session.destroy();
     res.redirect('/');
 });
-app.get('/reset-password', (req, res) => res.render('reset-password'));
-app.get('/reset/:token', async (req, res) => {
-    const user = await User.findOne({ resetToken: req.params.token, resetTokenExpiry: { $gt: Date.now() } });
-    if (!user) return res.render('error', { message: 'Invalid or expired token' });
-    res.render('reset', { token: req.params.token });
-});
 
 // Registration
 app.post('/register', async (req, res) => {
@@ -98,49 +90,6 @@ app.post('/login', async (req, res) => {
     } else {
         res.render('login', { error: 'Invalid credentials' });
     }
-});
-
-// Password Reset
-app.post('/reset-password', async (req, res) => {
-    const { email } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) return res.render('error', { message: 'User not found' });
-
-    const token = crypto.randomBytes(20).toString('hex');
-    user.resetToken = token;
-    user.resetTokenExpiry = Date.now() + 3600000; // 1 hour
-    await user.save();
-
-    const resetUrl = `http://localhost:3000/reset/${token}`;
-    const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-    });
-
-    await transporter.sendMail({
-        to: email,
-        subject: 'Password Reset',
-        html: `Click <a href="${resetUrl}">here</a> to reset your password.`,
-    });
-
-    res.render('login', { message: 'Password reset email sent' });
-});
-
-// Update Password
-app.post('/reset/:token', async (req, res) => {
-    const { password } = req.body;
-    const user = await User.findOne({ resetToken: req.params.token, resetTokenExpiry: { $gt: Date.now() } });
-    if (!user) return res.render('error', { message: 'Invalid or expired token' });
-
-    user.password = await bcrypt.hash(password, 10);
-    user.resetToken = undefined;
-    user.resetTokenExpiry = undefined;
-    await user.save();
-
-    res.render('login', { message: 'Password updated successfully' });
 });
 
 // Profile Picture Upload
